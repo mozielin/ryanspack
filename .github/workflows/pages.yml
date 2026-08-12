@@ -1,8 +1,15 @@
-name: Build and deploy package repository
+name: Build & Deploy Satis
 
 on:
   push:
     branches: [main]
+    paths:
+      - satis.json
+      - .github/workflows/pages.yml
+  repository_dispatch:
+    types: [package-released]
+  schedule:
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -12,40 +19,107 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Load package repository deploy key
-        uses: webfactory/ssh-agent@v0.9.1
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
-          ssh-private-key: ${{ secrets.SATIS_SSH_PRIVATE_KEY }}
+          php-version: '8.4'
+          coverage: none
 
-      - name: Build Composer repository
+      - name: Validate release payload
+        if: github.event_name == 'repository_dispatch'
+        env:
+          RELEASE_PACKAGE: ${{ github.event.client_payload.package }}
+          RELEASE_VERSION: ${{ github.event.client_payload.version }}
+          RELEASE_SHA: ${{ github.event.client_payload.sha }}
         run: |
-          if [ -n "${SSH_AUTH_SOCK:-}" ]; then
-            docker run --rm -v "$PWD:/build" -v "$SSH_AUTH_SOCK:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent -e 'GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=accept-new' -w /build composer/satis:latest build satis.json public
-          else
-            docker run --rm -v "$PWD:/build" -w /build composer/satis:latest build satis.json public
-          fi
+          php -r '
+          $package = getenv("RELEASE_PACKAGE");
+          $version = getenv("RELEASE_VERSION");
+          $sha = getenv("RELEASE_SHA");
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+          if (! preg_match("#^mozielin/[a-z0-9._-]+$#", $package)
+              || ! preg_match("/^v[0-9]+\\.[0-9]+\\.[0-9]+$/", $version)
+              || ! preg_match("/^[0-9a-f]{40}$/", $sha)) {
+              fwrite(STDERR, "ERROR: invalid release payload\n");
+              exit(1);
+          }
+
+          $config = json_decode(file_get_contents("satis.json"), true, flags: JSON_THROW_ON_ERROR);
+          $urls = array_column($config["repositories"] ?? [], "url");
+          $expectedUrl = "https://github.com/{$package}.git";
+
+          if (! in_array($expectedUrl, $urls, true)) {
+              fwrite(STDERR, "ERROR: package is not configured in satis.json\n");
+              exit(1);
+          }
+          '
+
+      - name: Install Satis
+        run: composer create-project composer/satis /tmp/satis --stability=dev --no-interaction --no-progress
+
+      - name: Build index
+        env:
+          SATIS_GITHUB_TOKEN: ${{ secrets.SATIS_GITHUB_TOKEN }}
+          COMPOSER_PROCESS_TIMEOUT: '0'
+        run: |
+          if [ -n "$SATIS_GITHUB_TOKEN" ]; then
+            composer config --global --auth github-oauth.github.com "$SATIS_GITHUB_TOKEN"
+          fi
+          php /tmp/satis/bin/satis build satis.json public
+
+      - name: Verify released package metadata
+        if: github.event_name == 'repository_dispatch'
+        env:
+          RELEASE_PACKAGE: ${{ github.event.client_payload.package }}
+          RELEASE_VERSION: ${{ github.event.client_payload.version }}
+          RELEASE_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          php -r '
+          $package = getenv("RELEASE_PACKAGE");
+          $version = getenv("RELEASE_VERSION");
+          $sha = getenv("RELEASE_SHA");
+          $path = "public/p2/{$package}.json";
+
+          if (! is_file($path)) {
+              fwrite(STDERR, "ERROR: missing {$path}\n");
+              exit(1);
+          }
+
+          foreach (json_decode(file_get_contents($path), true, flags: JSON_THROW_ON_ERROR)["packages"][$package] ?? [] as $candidate) {
+              if (($candidate["version"] ?? null) === $version
+                  && ($candidate["source"]["reference"] ?? null) === $sha
+                  && ($candidate["dist"]["reference"] ?? null) === $sha) {
+                  exit(0);
+              }
+          }
+
+          fwrite(STDERR, "ERROR: {$package} {$version} is missing or has a reference mismatch\n");
+          exit(1);
+          '
+
+      - name: Show index size
+        run: du -sh public && ls public
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: public
 
   deploy:
     needs: build
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4

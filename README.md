@@ -25,7 +25,7 @@ Add its Git repository to the `repositories` array in `satis.json`:
 ```json
 {
     "type": "vcs",
-    "url": "git@github.com:mozielin/laravel-tools.git"
+    "url": "https://github.com/mozielin/laravel-tools.git"
 }
 ```
 
@@ -35,11 +35,11 @@ For example, with two package sources:
 "repositories": [
     {
         "type": "vcs",
-        "url": "git@github.com:mozielin/laravel-tools.git"
+        "url": "https://github.com/mozielin/laravel-tools.git"
     },
     {
         "type": "vcs",
-        "url": "git@github.com:mozielin/payment-kit.git"
+        "url": "https://github.com/mozielin/payment-kit.git"
     }
 ]
 ```
@@ -77,4 +77,4 @@ composer config --global --auth github-oauth.github.com YOUR_GITHUB_TOKEN
 
 For entirely private package metadata, use a private registry host rather than public GitHub Pages.
 
-Satis needs separate read access while building the registry. Add the generated public key as a read-only deploy key on every private package repository. Then add its matching private key to this repository under **Settings > Secrets and variables > Actions** as `SATIS_SSH_PRIVATE_KEY`. Use SSH source URLs (`git@github.com:owner/repository.git`) in `satis.json` for private repositories.
+Satis needs separate read access while building the registry. Create a fine-grained GitHub personal access token with read-only **Contents** access to each private package repository. Add it to this repository under **Settings > Secrets and variables > Actions** as `SATIS_GITHUB_TOKEN`.

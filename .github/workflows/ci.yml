@@ -15,11 +15,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Load package repository deploy key
-        uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.SATIS_SSH_PRIVATE_KEY }}
-
       - name: Build Composer repository
         run: |
           if [ -n "${SSH_AUTH_SOCK:-}" ]; then
