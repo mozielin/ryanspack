@@ -1,7 +1,12 @@
 {
     "name": "mozielin/ryanspack",
     "homepage": "https://mozielin.github.io/ryanspack",
-    "repositories": [],
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/mozielin/error-pages.git"
+        }
+    ],
     "require-all": true,
     "archive": {
         "directory": "dist",
