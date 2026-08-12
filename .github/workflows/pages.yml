@@ -22,7 +22,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Load package repository deploy key
-        if: ${{ secrets.SATIS_SSH_PRIVATE_KEY != '' }}
         uses: webfactory/ssh-agent@v0.9.1
         with:
           ssh-private-key: ${{ secrets.SATIS_SSH_PRIVATE_KEY }}
