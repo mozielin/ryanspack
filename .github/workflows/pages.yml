@@ -21,8 +21,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Load package repository deploy key
+        if: ${{ secrets.SATIS_SSH_PRIVATE_KEY != '' }}
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.SATIS_SSH_PRIVATE_KEY }}
+
       - name: Build Composer repository
-        run: docker run --rm -v "$PWD:/build" -w /build composer/satis:latest build satis.json public
+        run: |
+          if [ -n "${SSH_AUTH_SOCK:-}" ]; then
+            docker run --rm -v "$PWD:/build" -v "$SSH_AUTH_SOCK:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent -e 'GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=accept-new' -w /build composer/satis:latest build satis.json public
+          else
+            docker run --rm -v "$PWD:/build" -w /build composer/satis:latest build satis.json public
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
