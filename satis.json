@@ -8,6 +8,7 @@
         }
     ],
     "require-all": true,
+    "output-html": true,
     "archive": {
         "directory": "dist",
         "format": "zip",
