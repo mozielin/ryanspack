@@ -1,0 +1,11 @@
+{
+    "name": "mozielin/ryanspack",
+    "homepage": "https://mozielin.github.io/ryanspack",
+    "repositories": [],
+    "require-all": true,
+    "archive": {
+        "directory": "dist",
+        "format": "zip",
+        "skip-dev": true
+    }
+}
